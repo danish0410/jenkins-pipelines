@@ -22,22 +22,27 @@ properties([
           import java.net.URL
           import jenkins.model.*
           import com.cloudbees.plugins.credentials.*
+          import com.cloudbees.plugins.credentials.impl.*
+          import org.jenkinsci.plugins.plaincredentials.StringCredentials
 
-          def creds = com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
-              com.cloudbees.plugins.credentials.impl.StringCredentialsImpl.class,
-              Jenkins.instance,
-              null,
-              null
+          def creds = CredentialsProvider.lookupCredentials(
+            StringCredentials.class,
+            Jenkins.instance,
+            null,
+            null
           ).find { it.id == 'github-api-token' }
 
-          if (!creds) return ["missing-token"]
+          if (!creds) return ["❌ GitHub token not found"]
 
-          def githubToken = creds.secret.getPlainText()
-          def connection = new URL("https://api.github.com/users/danish0410/repos").openConnection()
-          connection.setRequestProperty("Authorization", "token ${githubToken}")
-          connection.connect()
+          def token = creds.secret.getPlainText()
+          def url = "https://api.github.com/users/danish0410/repos"
 
-          def repos = new JsonSlurper().parse(connection.inputStream)
+          def conn = new URL(url).openConnection()
+          conn.setRequestProperty("Authorization", "token ${token}")
+          conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+          conn.connect()
+
+          def repos = new JsonSlurper().parse(conn.inputStream)
           return repos.collect { it.name }
                       .findAll { !it.startsWith("common") }
                       .sort()
@@ -62,40 +67,43 @@ properties([
           import java.net.URL
           import jenkins.model.*
           import com.cloudbees.plugins.credentials.*
+          import com.cloudbees.plugins.credentials.impl.*
+          import org.jenkinsci.plugins.plaincredentials.StringCredentials
 
           def repo = REPO_NAME
           if (!repo) return ["select-a-repo"]
 
-          def creds = com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
-              com.cloudbees.plugins.credentials.impl.StringCredentialsImpl.class,
-              Jenkins.instance,
-              null,
-              null
+          def creds = CredentialsProvider.lookupCredentials(
+            StringCredentials.class,
+            Jenkins.instance,
+            null,
+            null
           ).find { it.id == 'github-api-token' }
 
-          if (!creds) return ["missing-token"]
+          if (!creds) return ["❌ GitHub token not found"]
 
-          def githubToken = creds.secret.getPlainText()
-          def apiUrl = "https://api.github.com/repos/danish0410/${repo}/branches"
+          def token = creds.secret.getPlainText()
+          def url = "https://api.github.com/repos/danish0410/${repo}/branches"
 
-          def connection = new URL(apiUrl).openConnection()
-          connection.setRequestProperty("Authorization", "token ${githubToken}")
-          connection.connect()
+          def conn = new URL(url).openConnection()
+          conn.setRequestProperty("Authorization", "token ${token}")
+          conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+          conn.connect()
 
-          def branches = new JsonSlurper().parse(connection.inputStream)
+          def branches = new JsonSlurper().parse(conn.inputStream)
           return branches.collect { it.name }.sort()
         ''']
       ]
     ],
 
-    // 🌍 Environment
+    // 🌍 Environment Selector
     choice(
       name: 'ENV_STAGE',
       choices: ['dev', 'staging', 'prod'],
       description: 'Deployment Environment'
     ),
 
-    // 🧱 Shared Library Branch
+    // 📚 Shared Library Branch
     string(
       name: 'LIBRARY_BRANCH',
       defaultValue: 'feature',
