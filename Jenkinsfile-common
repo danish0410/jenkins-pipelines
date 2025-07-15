@@ -2,6 +2,7 @@ def app = null
 
 properties([
   parameters([
+    // --- Dynamic REPO_NAME Dropdown ---
     [$class: 'CascadeChoiceParameter',
       choiceType: 'PT_SINGLE_SELECT',
       name: 'REPO_NAME',
@@ -12,20 +13,29 @@ properties([
         script: [classpath: [], sandbox: false, script:
           '''
           import groovy.json.JsonSlurper
+
           def token = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.CredentialsProvider')[0]
               .getCredentials(com.cloudbees.plugins.credentials.CredentialsMatchers.withId('github-api-token'))[0]
               .getSecret().getPlainText()
+
           def repos = []
           def apiUrl = "https://api.github.com/users/danish0410/repos?per_page=100"
-          def connection = new URL(apiUrl).openConnection()
-          connection.setRequestProperty("Authorization", "token ${token}")
-          def response = connection.inputStream.text
-          def json = new groovy.json.JsonSlurper().parseText(response)
-          json.each {
-              if (!it.name.startsWith("common")) {
-                  repos << it.name
+
+          try {
+              def connection = new URL(apiUrl).openConnection()
+              connection.setRequestProperty("Authorization", "token ${token}")
+              def response = connection.inputStream.text
+              def json = new JsonSlurper().parseText(response)
+
+              json.each {
+                  if (it.name && !it.name.startsWith("common")) {
+                      repos << it.name
+                  }
               }
+          } catch (Exception e) {
+              repos << "ERROR: ${e.message}"
           }
+
           return repos.sort()
           '''
         ],
@@ -37,6 +47,7 @@ properties([
       ]
     ],
 
+    // --- Dynamic REPO_BRANCH Dropdown ---
     [$class: 'CascadeChoiceParameter',
       choiceType: 'PT_SINGLE_SELECT',
       name: 'REPO_BRANCH',
@@ -48,19 +59,27 @@ properties([
         script: [classpath: [], sandbox: false, script:
           '''
           import groovy.json.JsonSlurper
+
           def token = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.CredentialsProvider')[0]
               .getCredentials(com.cloudbees.plugins.credentials.CredentialsMatchers.withId('github-api-token'))[0]
               .getSecret().getPlainText()
+
           def repoName = REPO_NAME
           def branches = []
+
           if (repoName) {
-              def apiUrl = "https://api.github.com/repos/danish0410/${repoName}/branches"
-              def connection = new URL(apiUrl).openConnection()
-              connection.setRequestProperty("Authorization", "token ${token}")
-              def response = connection.inputStream.text
-              def json = new JsonSlurper().parseText(response)
-              branches = json*.name
+              try {
+                  def apiUrl = "https://api.github.com/repos/danish0410/${repoName}/branches"
+                  def connection = new URL(apiUrl).openConnection()
+                  connection.setRequestProperty("Authorization", "token ${token}")
+                  def response = connection.inputStream.text
+                  def json = new JsonSlurper().parseText(response)
+                  branches = json*.name
+              } catch (Exception e) {
+                  branches << "ERROR: ${e.message}"
+              }
           }
+
           return branches ?: ['feature']
           '''
         ],
@@ -72,6 +91,7 @@ properties([
       ]
     ],
 
+    // --- Static Choices ---
     choice(name: 'ENV_STAGE', choices: ['dev', 'staging', 'prod'], description: 'Deployment Environment'),
     string(name: 'LIBRARY_BRANCH', defaultValue: 'feature', description: 'Branch of Shared Library (common-lib-unified)')
   ])
@@ -88,6 +108,7 @@ pipeline {
     stage('Load Shared Library & Init') {
       steps {
         script {
+          // Dynamically load shared lib and instantiate ApplicationBuilder
           library("common-lib-unified@${params.LIBRARY_BRANCH}")
           def builderClass = evaluate("org.commonlibunified.ApplicationBuilder")
           app = builderClass.newInstance(this)
