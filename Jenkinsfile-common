@@ -1,36 +1,95 @@
-@Library("common-lib-unified@feature") _
-import org.commonlibunified.ApplicationBuilder
-
-def app = null
-
 properties([
   parameters([
-    // --- Static REPO_NAME Choice ---
-    choice(
+
+    // 🧠 Dynamic GitHub Repo Loader
+    [$class: 'CascadeChoiceParameter',
+      choiceType: 'PT_SINGLE_SELECT',
+      filterLength: 1,
+      filterable: true,
       name: 'REPO_NAME',
-      choices: [
-        'springboot-role',
-        'nginx-p81',
-        'php-nginx-helloworld'
-      ],
-      description: 'Repository SSH URL to checkout'
-    ),
+      description: 'Select repo from danish0410 (excluding common*)',
+      randomName: 'repoNameParam',
+      referencedParameters: '',
+      script: [
+        $class: 'GroovyScript',
+        fallbackScript: [classpath: [], sandbox: true, script: 'return ["error-fetching-repos"]'],
+        script: [classpath: [], sandbox: true, script: '''
+          import groovy.json.JsonSlurper
+          import java.net.URL
+          import jenkins.model.*
+          import com.cloudbees.plugins.credentials.*
 
-    // --- Static REPO_BRANCH Choice ---
-    choice(
+          def creds = com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
+              com.cloudbees.plugins.credentials.impl.StringCredentialsImpl.class,
+              Jenkins.instance,
+              null,
+              null
+          ).find { it.id == 'github-api-token' }
+
+          if (!creds) return ["missing-token"]
+
+          def githubToken = creds.secret.getPlainText()
+          def connection = new URL("https://api.github.com/users/danish0410/repos").openConnection()
+          connection.setRequestProperty("Authorization", "token ${githubToken}")
+          connection.connect()
+
+          def repos = new JsonSlurper().parse(connection.inputStream)
+          return repos.collect { it.name }.findAll { !it.startsWith("common") }.sort()
+        ''']
+      ]
+    ],
+
+    // 🔁 Dynamic REPO_BRANCH Picker (based on REPO_NAME)
+    [$class: 'CascadeChoiceParameter',
+      choiceType: 'PT_SINGLE_SELECT',
+      filterLength: 1,
+      filterable: true,
       name: 'REPO_BRANCH',
-      choices: ['main', 'dev', 'feature'],
-      description: 'Branch to checkout'
-    ),
+      description: 'Branches from selected GitHub repo',
+      randomName: 'repoBranchParam',
+      referencedParameters: 'REPO_NAME',
+      script: [
+        $class: 'GroovyScript',
+        fallbackScript: [classpath: [], sandbox: true, script: 'return ["error-fetching-branches"]'],
+        script: [classpath: [], sandbox: true, script: '''
+          import groovy.json.JsonSlurper
+          import java.net.URL
+          import jenkins.model.*
+          import com.cloudbees.plugins.credentials.*
 
-    // --- Static ENV_STAGE ---
+          def repo = REPO_NAME
+          if (!repo) return ["select-a-repo"]
+
+          def creds = com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
+              com.cloudbees.plugins.credentials.impl.StringCredentialsImpl.class,
+              Jenkins.instance,
+              null,
+              null
+          ).find { it.id == 'github-api-token' }
+
+          if (!creds) return ["missing-token"]
+
+          def githubToken = creds.secret.getPlainText()
+          def apiUrl = "https://api.github.com/repos/danish0410/${repo}/branches"
+
+          def connection = new URL(apiUrl).openConnection()
+          connection.setRequestProperty("Authorization", "token ${githubToken}")
+          connection.connect()
+
+          def branches = new JsonSlurper().parse(connection.inputStream)
+          return branches.collect { it.name }.sort()
+        ''']
+      ]
+    ],
+
+    // 🌍 Environment
     choice(
       name: 'ENV_STAGE',
       choices: ['dev', 'staging', 'prod'],
       description: 'Deployment Environment'
     ),
 
-    // --- Shared Library Branch ---
+    // 🧱 Shared Library Branch
     string(
       name: 'LIBRARY_BRANCH',
       defaultValue: 'feature',
@@ -38,6 +97,11 @@ properties([
     )
   ])
 ])
+
+@Library("common-lib-unified@${params.LIBRARY_BRANCH}") _
+import org.commonlibunified.ApplicationBuilder
+
+def app = null
 
 pipeline {
   agent any
@@ -50,12 +114,9 @@ pipeline {
     stage('Load Shared Library & Init') {
       steps {
         script {
-          // Load the shared library dynamically
           library("common-lib-unified@${params.LIBRARY_BRANCH}")
-    
-          // Instantiate ApplicationBuilder and call no-arg initialize
-          app = new org.commonlibunified.ApplicationBuilder(this)
-          app.initialize()  // ✅ Now reads from steps.params
+          app = new ApplicationBuilder(this)
+          app.initialize()
         }
       }
     }
@@ -77,25 +138,19 @@ pipeline {
 
     stage('Checkout Repo') {
       steps {
-        script {
-          app.checkout(params.REPO_BRANCH)
-        }
+        script { app.checkout(params.REPO_BRANCH) }
       }
     }
 
     stage('Build Application') {
       steps {
-        script {
-          app.build(params.REPO_BRANCH)
-        }
+        script { app.build(params.REPO_BRANCH) }
       }
     }
 
     stage('Pre-Run Debug') {
       steps {
-        script {
-          app.preRunDebug()
-        }
+        script { app.preRunDebug() }
       }
     }
 
@@ -104,25 +159,19 @@ pipeline {
         expression { app?.appType == 'springboot' }
       }
       steps {
-        script {
-          app.startMySQLContainer()
-        }
+        script { app.startMySQLContainer() }
       }
     }
 
     stage('Run Container') {
       steps {
-        script {
-          app.runContainer()
-        }
+        script { app.runContainer() }
       }
     }
 
     stage('Health Check') {
       steps {
-        script {
-          app.healthCheck()
-        }
+        script { app.healthCheck() }
       }
     }
 
