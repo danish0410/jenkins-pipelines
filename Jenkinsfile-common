@@ -2,98 +2,37 @@ def app = null
 
 properties([
   parameters([
-    // --- Dynamic REPO_NAME Dropdown ---
-    [$class: 'CascadeChoiceParameter',
-      choiceType: 'PT_SINGLE_SELECT',
+    // --- Static REPO_NAME Choice ---
+    choice(
       name: 'REPO_NAME',
-      description: 'Repository Name to checkout',
-      filterable: true,
-      script: [
-        $class: 'GroovyScript',
-        script: [classpath: [], sandbox: false, script:
-          '''
-          import groovy.json.JsonSlurper
+      choices: [
+        'git@github.com:danish0410/springboot-role.git',
+        'git@github.com:danish0410/php-nginx-helloworld.git',
+        'git@github.com:danish0410/nginx-p81.git'
+      ],
+      description: 'Repository SSH URL to checkout'
+    ),
 
-          def token = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.CredentialsProvider')[0]
-              .getCredentials(com.cloudbees.plugins.credentials.CredentialsMatchers.withId('github-api-token'))[0]
-              .getSecret().getPlainText()
-
-          def repos = []
-          def apiUrl = "https://api.github.com/users/danish0410/repos?per_page=100"
-
-          try {
-              def connection = new URL(apiUrl).openConnection()
-              connection.setRequestProperty("Authorization", "token ${token}")
-              def response = connection.inputStream.text
-              def json = new JsonSlurper().parseText(response)
-
-              json.each {
-                  if (it.name && !it.name.startsWith("common")) {
-                      repos << it.name
-                  }
-              }
-          } catch (Exception e) {
-              repos << "ERROR: ${e.message}"
-          }
-
-          return repos.sort()
-          '''
-        ],
-        fallbackScript: [
-          classpath: [],
-          sandbox: false,
-          script: 'return ["springboot-role"]'
-        ]
-      ]
-    ],
-
-    // --- Dynamic REPO_BRANCH Dropdown ---
-    [$class: 'CascadeChoiceParameter',
-      choiceType: 'PT_SINGLE_SELECT',
+    // --- Static REPO_BRANCH Choice ---
+    choice(
       name: 'REPO_BRANCH',
-      description: 'Branch to checkout',
-      filterable: true,
-      referencedParameters: 'REPO_NAME',
-      script: [
-        $class: 'GroovyScript',
-        script: [classpath: [], sandbox: false, script:
-          '''
-          import groovy.json.JsonSlurper
+      choices: ['main', 'dev', 'feature'],
+      description: 'Branch to checkout'
+    ),
 
-          def token = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.CredentialsProvider')[0]
-              .getCredentials(com.cloudbees.plugins.credentials.CredentialsMatchers.withId('github-api-token'))[0]
-              .getSecret().getPlainText()
+    // --- Static ENV_STAGE ---
+    choice(
+      name: 'ENV_STAGE',
+      choices: ['dev', 'staging', 'prod'],
+      description: 'Deployment Environment'
+    ),
 
-          def repoName = REPO_NAME
-          def branches = []
-
-          if (repoName) {
-              try {
-                  def apiUrl = "https://api.github.com/repos/danish0410/${repoName}/branches"
-                  def connection = new URL(apiUrl).openConnection()
-                  connection.setRequestProperty("Authorization", "token ${token}")
-                  def response = connection.inputStream.text
-                  def json = new JsonSlurper().parseText(response)
-                  branches = json*.name
-              } catch (Exception e) {
-                  branches << "ERROR: ${e.message}"
-              }
-          }
-
-          return branches ?: ['feature']
-          '''
-        ],
-        fallbackScript: [
-          classpath: [],
-          sandbox: false,
-          script: 'return ["feature"]'
-        ]
-      ]
-    ],
-
-    // --- Static Choices ---
-    choice(name: 'ENV_STAGE', choices: ['dev', 'staging', 'prod'], description: 'Deployment Environment'),
-    string(name: 'LIBRARY_BRANCH', defaultValue: 'feature', description: 'Branch of Shared Library (common-lib-unified)')
+    // --- Shared Library Branch ---
+    string(
+      name: 'LIBRARY_BRANCH',
+      defaultValue: 'feature',
+      description: 'Branch of Shared Library (common-lib-unified)'
+    )
   ])
 ])
 
@@ -108,11 +47,17 @@ pipeline {
     stage('Load Shared Library & Init') {
       steps {
         script {
-          // Dynamically load shared lib and instantiate ApplicationBuilder
+          // Dynamically load shared library
           library("common-lib-unified@${params.LIBRARY_BRANCH}")
+
+          // Extract only the repo name from the full git URL
+          def repoUrl = params.REPO_NAME
+          def repoName = repoUrl.split('/').last().replace('.git', '')
+
+          // Initialize ApplicationBuilder
           def builderClass = evaluate("org.commonlibunified.ApplicationBuilder")
           app = builderClass.newInstance(this)
-          app.initialize(params.REPO_NAME, params.ENV_STAGE)
+          app.initialize(repoName, params.ENV_STAGE)
         }
       }
     }
@@ -134,19 +79,25 @@ pipeline {
 
     stage('Checkout Repo') {
       steps {
-        script { app.checkout(params.REPO_BRANCH) }
+        script {
+          app.checkout(params.REPO_BRANCH)
+        }
       }
     }
 
     stage('Build Application') {
       steps {
-        script { app.build(params.REPO_BRANCH) }
+        script {
+          app.build(params.REPO_BRANCH)
+        }
       }
     }
 
     stage('Pre-Run Debug') {
       steps {
-        script { app.preRunDebug() }
+        script {
+          app.preRunDebug()
+        }
       }
     }
 
@@ -155,19 +106,25 @@ pipeline {
         expression { app?.appType == 'springboot' }
       }
       steps {
-        script { app.startMySQLContainer() }
+        script {
+          app.startMySQLContainer()
+        }
       }
     }
 
     stage('Run Container') {
       steps {
-        script { app.runContainer() }
+        script {
+          app.runContainer()
+        }
       }
     }
 
     stage('Health Check') {
       steps {
-        script { app.healthCheck() }
+        script {
+          app.healthCheck()
+        }
       }
     }
 
