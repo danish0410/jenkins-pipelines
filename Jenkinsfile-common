@@ -6,7 +6,7 @@ properties([
   parameters([
 
     // 🧠 Dynamic GitHub Repo Loader (REPO_NAME)
-    [$class: 'CascadeChoiceParameter',
+    [string(name: 'LIBRARY_BRANCH', defaultValue: 'feature', description: 'Branch of Shared Library'),
       choiceType: 'PT_SINGLE_SELECT',
       filterLength: 1,
       filterable: true,
@@ -51,7 +51,7 @@ properties([
     ],
 
     // 🔁 Dynamic REPO_BRANCH Picker (based on REPO_NAME)
-    [$class: 'CascadeChoiceParameter',
+    [string(name: 'LIBRARY_BRANCH', defaultValue: 'feature', description: 'Branch of Shared Library'),
       choiceType: 'PT_SINGLE_SELECT',
       filterLength: 1,
       filterable: true,
