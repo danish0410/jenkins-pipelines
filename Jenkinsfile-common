@@ -98,8 +98,6 @@ properties([
   ])
 ])
 
-import org.commonlibunified.ApplicationBuilder
-
 def app = null
 
 pipeline {
@@ -114,7 +112,7 @@ pipeline {
       steps {
         script {
           library("common-lib-unified@${params.LIBRARY_BRANCH}")
-          app = new ApplicationBuilder(this)
+          app = new org.commonlibunified.ApplicationBuilder(this)
           app.initialize()
         }
       }
