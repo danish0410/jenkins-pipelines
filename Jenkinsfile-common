@@ -9,9 +9,9 @@ properties([
     choice(
       name: 'REPO_NAME',
       choices: [
-        'git@github.com:danish0410/springboot-role.git',
-        'git@github.com:danish0410/php-nginx-helloworld.git',
-        'git@github.com:danish0410/nginx-p81.git'
+        'springboot-role',
+        'nginx-p81',
+        'php-nginx-helloworld'
       ],
       description: 'Repository SSH URL to checkout'
     ),
