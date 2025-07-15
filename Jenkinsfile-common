@@ -1,4 +1,3 @@
-@Library("common-lib-unified@${LIBRARY_BRANCH}") _
 import org.commonlibunified.*
 
 def app = null
@@ -20,6 +19,14 @@ pipeline {
   }
 
   stages {
+    stage('Load Shared Library') {
+      steps {
+        script {
+          library("common-lib-unified@${params.LIBRARY_BRANCH}")
+        }
+      }
+    }
+
     stage('Startup Debug') {
       steps {
         echo "⚙️ REPO_NAME: ${params.REPO_NAME}"
@@ -32,7 +39,7 @@ pipeline {
     stage('Initialize Environment') {
       steps {
         script {
-          app = new ApplicationBuilder(this)
+          app = new org.commonlibunified.ApplicationBuilder(this)
           app.initialize(params.REPO_NAME, params.ENV_STAGE)
         }
       }
