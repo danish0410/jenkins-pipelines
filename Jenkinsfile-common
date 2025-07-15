@@ -47,17 +47,12 @@ pipeline {
     stage('Load Shared Library & Init') {
       steps {
         script {
-          // Dynamically load shared library
+          // Load the shared library dynamically
           library("common-lib-unified@${params.LIBRARY_BRANCH}")
-
-          // Extract only the repo name from the full git URL
-          def repoUrl = params.REPO_NAME
-          def repoName = repoUrl.split('/').last().replace('.git', '')
-
-          // Initialize ApplicationBuilder
-          def builderClass = evaluate("org.commonlibunified.ApplicationBuilder")
-          app = builderClass.newInstance(this)
-          app.initialize(repoName, params.ENV_STAGE)
+    
+          // Instantiate ApplicationBuilder and call no-arg initialize
+          app = new org.commonlibunified.ApplicationBuilder(this)
+          app.initialize()  // ✅ Now reads from steps.params
         }
       }
     }
