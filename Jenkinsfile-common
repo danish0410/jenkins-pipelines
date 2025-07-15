@@ -1,3 +1,7 @@
+@Library("common-lib-unified@feature") _
+
+def app = null
+
 properties([
   parameters([
 
@@ -98,7 +102,7 @@ properties([
   ])
 ])
 
-def app = null
+import org.commonlibunified.ApplicationBuilder
 
 pipeline {
   agent any
@@ -112,7 +116,7 @@ pipeline {
       steps {
         script {
           library("common-lib-unified@${params.LIBRARY_BRANCH}")
-          app = new org.commonlibunified.ApplicationBuilder(this)
+          app = new ApplicationBuilder(this)
           app.initialize()
         }
       }
