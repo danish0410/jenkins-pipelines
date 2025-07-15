@@ -98,7 +98,6 @@ properties([
   ])
 ])
 
-@Library("common-lib-unified@${params.LIBRARY_BRANCH}") _
 import org.commonlibunified.ApplicationBuilder
 
 def app = null
